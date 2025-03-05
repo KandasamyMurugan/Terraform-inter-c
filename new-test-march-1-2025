@@ -1,0 +1,40 @@
+# Create AWS backup plan
+
+aws backup create-backup-plan \
+  --backup-plan '{"BackupPlanName": "EC2-AutoBackup","Rules":[{"RuleName":"DailyBackup","TargetBackupVaultName":"Default","ScheduleExpression":"cron(0 0 * * ? *)"}]}'
+
+#Create a Lambda Function for Auto Backup
+import boto3
+
+ec2 = boto3.client('ec2')
+backup = boto3.client('backup')
+
+BACKUP_PLAN_ID = "your-backup-plan-id"  # Replace with actual Backup Plan ID
+
+def lambda_handler(event, context):
+    # Get list of running instances
+    running_instances = []
+    response = ec2.describe_instances(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+
+    for reservation in response['Reservations']:
+        for instance in reservation['Instances']:
+            running_instances.append(instance['InstanceId'])
+
+    # Get instances already in AWS Backup
+    protected_resources = backup.list_protected_resources()
+    protected_instances = {res['ResourceArn'].split('/')[-1] for res in protected_resources['Results']}
+
+    # Add missing instances to AWS Backup
+    for instance_id in running_instances:
+        if instance_id not in protected_instances:
+            backup.create_backup_selection(
+                BackupPlanId=BACKUP_PLAN_ID,
+                BackupSelection={
+                    "SelectionName": "EC2AutoBackup",
+                    "IamRoleArn": "arn:aws:iam::your-account-id:role/service-role/AWSBackupDefaultServiceRole",
+                    "Resources": [f"arn:aws:ec2:us-east-1:your-account-id:instance/{instance_id}"]
+                }
+            )
+            print(f"Added {instance_id} to AWS Backup")
+
+    return {"message": "Backup sync completed"}

@@ -1,0 +1,48 @@
+aws backup create-backup-selection \
+  --backup-plan-id 722cf2d2-070b-4431-9761-c0150f074225 \
+  --backup-selection '{
+    "SelectionName": "MyBackupSelection",
+    "IamRoleArn": "arn:aws:iam::205930609030:role/service-role/AWSBackupDefaultServiceRole",
+    "Resources": [
+      "arn:aws:ec2:us-east-1:205930609030:instance/i-0603a0a083ee0bd6d"
+    ]
+  }'
+
+
+
+
+aws backup start-backup-job \
+  --backup-vault-name "Default" \
+  --resource-arn "arn:aws:ec2:us-east-1:205930609030:instance/i-03bcc97fec9a4b254" \
+  --iam-role-arn "arn:aws:iam::205930609030:role/service-role/AWSBackupDefaultServiceRole" \
+  --lifecycle DeleteAfterDays=30
+
+
+aws lambda add-permission \
+  --function-name awsbackup-automation-for-running-instances \
+  --statement-id EventBridgeInvokePermission \
+  --action "lambda:InvokeFunction" \
+  --principal events.amazonaws.com \
+  --source-arn arn:aws:events:us-east-1:205930609030:rule/lambda-backup-cron-job
+
+  aws events put-rule \
+      --name lambda-backup-cron-job \
+      --schedule-expression "cron(0/3 3 * * ? *)" \
+      --state ENABLED
+
+
+      aws events put-targets \
+          --rule lambda-backup-cron-job \
+          --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:205930609030:function:awsbackup-automation-for-running-instances"
+
+aws lambda invoke \
+    --function-name awsbackup-automation-for-running-instances \
+    output.json
+
+
+
+aws backup start-backup-job \
+  --backup-vault-name "Default" \
+  --resource-arn "arn:aws:ec2:us-east-1:205930609030:instance/i-0e1bef09ca0fd61a6" \
+  --iam-role-arn "arn:aws:iam::205930609030:role/service-role/AWSBackupDefaultServiceRole" \
+  --lifecycle DeleteAfterDays=30
